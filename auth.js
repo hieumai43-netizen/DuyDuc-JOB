@@ -87,19 +87,49 @@
   }
 
   function renderLogin(message=''){
-    const localHost=['127.0.0.1','localhost'].includes(location.hostname);
-    const hostHelp=localHost ? `<div class="small-note" style="margin-top:12px;text-align:left"><b>Đang chạy thử trên ${esc(location.hostname)}</b>. Firebase có thể yêu cầu thêm tên miền này vào Authentication → Paramètres → Domaines autorisés. Thêm <code>${esc(location.hostname)}</code> (không nhập cổng 5500). Nếu dùng cả localhost và 127.0.0.1, thêm cả hai.</div>` : '';
     showRoot(`<main class="auth-page"><section class="auth-card">
-      <div class="auth-mark">🎯</div><h1>JobLead VN</h1>
-      <p class="auth-help">Đăng nhập bằng Google. Tài khoản mới cần Admin duyệt trước khi sử dụng.</p>
+      <div class="auth-mark">🎯</div>
+      <h1>JobLead VN</h1>
+      <p class="auth-help">Đăng nhập bằng email và mật khẩu riêng. Không cần tài khoản Google.</p>
       ${message?`<div class="auth-error">${esc(message)}</div>`:''}
-      <button class="primary-btn" id="googleLogin" type="button">🔐 Đăng nhập bằng Google</button>
-      <p class="small-note">Đăng nhập lần đầu sẽ tự gửi yêu cầu phê duyệt. Không cần mật khẩu riêng.</p>${hostHelp}
+      <div class="auth-tabs"><button class="active" data-mode="login">Đăng nhập</button><button data-mode="register">Đăng ký</button></div>
+      <form id="authForm" class="form-grid">
+        <input type="hidden" name="mode" value="login">
+        <div class="field name-field" hidden><label>Tên hiển thị</label><input name="displayName" placeholder="Tên của bạn"></div>
+        <div class="field"><label>Email</label><input type="email" name="email" required autocomplete="email"></div>
+        <div class="field"><label>Mật khẩu</label><input type="password" name="password" minlength="6" required autocomplete="current-password"></div>
+        <button class="primary-btn submit-auth">Đăng nhập</button>
+        <button class="link-btn forgot-btn" type="button">Quên mật khẩu</button>
+      </form>
+      <p class="small-note">Sau khi đăng ký, tài khoản sẽ ở trạng thái chờ. Chỉ khi quản trị viên phê duyệt bạn mới vào được app.</p>
     </section></main>`);
-    document.getElementById('googleLogin').onclick=async()=>{
-      const btn=document.getElementById('googleLogin');btn.disabled=true;
-      try{await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());}
-      catch(err){renderLogin(firebaseError(err));}
+    const form=document.getElementById('authForm');
+    document.querySelectorAll('.auth-tabs button').forEach(btn=>btn.onclick=()=>{
+      document.querySelectorAll('.auth-tabs button').forEach(x=>x.classList.toggle('active',x===btn));
+      const reg=btn.dataset.mode==='register'; form.mode.value=reg?'register':'login';
+      form.querySelector('.name-field').hidden=!reg;
+      form.querySelector('.submit-auth').textContent=reg?'Tạo tài khoản':'Đăng nhập';
+      form.querySelector('.forgot-btn').hidden=reg;
+    });
+    form.onsubmit=async e=>{
+      e.preventDefault(); const f=new FormData(form); const email=String(f.get('email')).trim().toLowerCase(); const password=String(f.get('password'));
+      try{
+        if(f.get('mode')==='register'){
+          const cred=await auth.createUserWithEmailAndPassword(email,password);
+          try{
+            await createPendingProfile(cred.user,String(f.get('displayName')).trim());
+            renderPending(email,'Đã gửi yêu cầu. Hãy báo cho quản trị viên phê duyệt.');
+          }catch(profileErr){
+            if(isPermissionError(profileErr)) renderFirestoreHelp(email,firebaseError(profileErr));
+            else throw profileErr;
+          }
+        }else await auth.signInWithEmailAndPassword(email,password);
+      }catch(err){ renderLogin(firebaseError(err)); }
+    };
+    form.querySelector('.forgot-btn').onclick=async()=>{
+      const email=form.email.value.trim(); if(!email) return renderLogin('Hãy nhập email trước.');
+      try{ await auth.sendPasswordResetEmail(email); renderLogin('Đã gửi email đặt lại mật khẩu.'); }
+      catch(err){ renderLogin(firebaseError(err)); }
     };
   }
 
@@ -150,7 +180,7 @@
   }
 
   function firebaseError(err){
-    const map={'auth/popup-blocked':'Trình duyệt đang chặn cửa sổ đăng nhập Google. Hãy cho phép pop-up.','auth/unauthorized-domain':`Tên miền ${location.hostname} chưa được Firebase cho phép. Vào Firebase → Authentication → Paramètres → Domaines autorisés, thêm ${location.hostname} (không có http:// hay cổng :5500), sau đó thử lại.`,
+    const map={
       'auth/invalid-credential':'Email hoặc mật khẩu chưa đúng.','auth/email-already-in-use':'Email này đã được đăng ký.','auth/weak-password':'Mật khẩu phải có ít nhất 6 ký tự.','auth/invalid-email':'Địa chỉ email không hợp lệ.','auth/too-many-requests':'Thử quá nhiều lần. Hãy đợi một lúc.'
     };
     return map[err?.code]||err?.message||'Không thể xử lý yêu cầu.';
@@ -159,7 +189,7 @@
   async function renderAdmin(){
     showRoot(`<main class="auth-page"><section class="auth-card admin-card">
       <div class="admin-head">
-        <div><div class="admin-kicker">👑 QUẢN TRỊ VIÊN</div><h1>Quản lý người dùng</h1><p class="auth-help">Duyệt, khóa hoặc mở lại tài khoản Google.</p></div>
+        <div><div class="admin-kicker">👑 QUẢN TRỊ VIÊN</div><h1>Quản lý người dùng</h1><p class="auth-help">Duyệt, khóa hoặc mở lại tài khoản.</p></div>
         <button class="secondary-btn" id="backApp">← Về ứng dụng</button>
       </div>
       <div class="admin-summary" id="adminSummary"><div><strong>—</strong><span>Chờ duyệt</span></div><div><strong>—</strong><span>Đang dùng</span></div><div><strong>—</strong><span>Đã khóa</span></div></div>
@@ -203,7 +233,15 @@
 
   async function onUser(user){
     if(!user){ currentProfile=null; window.jobleadGetIdToken=null; renderLogin(); return; }
-    if(isAdmin(user)){ if(!user.emailVerified){renderLogin('Tài khoản Admin cần xác minh email Google.');return;} showApp(user,{status:'approved',admin:true}); return; }
+    if(isAdmin(user)){
+      if(!user.emailVerified){
+        showRoot(`<main class="auth-page"><section class="auth-card"><h1>Xác minh email quản trị</h1><p>Để bảo vệ quyền quản trị, hãy xác minh email ${esc(user.email)} trước khi sử dụng.</p><button class="primary-btn" id="verifyAdmin">Gửi email xác minh</button><button class="secondary-btn" id="refreshAdmin">Tôi đã xác minh</button><button class="link-btn" id="logoutAdmin">Đăng xuất</button></section></main>`);
+        document.getElementById('verifyAdmin').onclick=async()=>{try{await user.sendEmailVerification();authToast('Đã gửi email xác minh. Kiểm tra cả thư rác.');}catch(e){authToast(firebaseError(e));}};
+        document.getElementById('refreshAdmin').onclick=async()=>{await user.reload();onUser(auth.currentUser);};
+        document.getElementById('logoutAdmin').onclick=()=>auth.signOut();return;
+      }
+      showApp(user,{status:'approved',admin:true}); return;
+    }
     try{
       const ref=db.collection('joblead_users').doc(user.uid);
       let doc=await ref.get();
