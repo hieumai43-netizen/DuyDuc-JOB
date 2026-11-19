@@ -1,19 +1,13 @@
-# JobLead VN V2.9 — Email/Password như Chusen Manager
+# JobLead VN V3.0 — Icon ảnh & PWA
 
-## Đã thay đổi
-- Bỏ đăng nhập Google popup; thêm tab Đăng nhập / Đăng ký bằng email và mật khẩu (ít nhất 6 ký tự).
-- Đăng ký tạo hồ sơ `joblead_users` ở trạng thái `pending`. Admin có thể Duyệt, Chờ, Khóa trong ứng dụng.
-- Giữ nguyên tìm kiếm, app.js, Worker V2.7, SERPER_API_KEY và kiểm tra quyền ở Worker.
-- Admin phải xác minh email trước khi được quyền quản trị hoặc quét theo quyền admin.
+Giữ nguyên chức năng của bản V2.9 (Firebase Email/Password, duyệt/khóa tài khoản, tìm kiếm, Worker).
 
-## Triển khai
-1. Firebase Console > Authentication > Sign-in method: bật **Email/Password**. Có thể tắt Google nếu không còn người dùng cũ cần đăng nhập.
-2. Firebase Console > Firestore Database > Rules: kiểm tra/publish nội dung `firestore-joblead.rules` (đúng email admin).
-3. Tải các file web lên repository GitHub Pages bằng GitHub Desktop (Commit, Push). Chỉ thay Worker nếu Worker hiện tại chưa chạy đúng; không cần thay cho riêng tính năng đăng nhập.
-4. Admin: đăng ký bằng email admin cấu hình trong `firebase-config.js`, nhấn **Gửi email xác minh**, mở email xác minh, trở lại ứng dụng và nhấn **Tôi đã xác minh**. Sau đó có thể duyệt tài khoản.
-5. Người dùng: Đăng ký > chờ duyệt > đăng nhập > sử dụng.
+## Cập nhật GitHub Pages
+1. Giải nén ZIP và sao chép toàn bộ file/thư mục vào thư mục repository hiện tại, ghi đè file trùng tên.
+2. Giữ nguyên cấu hình Firebase/Worker đang hoạt động nếu bạn đã tùy chỉnh sau V2.9.
+3. GitHub Desktop: Commit to main > Push origin. Chờ Pages triển khai, mở lại website trên điện thoại.
+4. iPhone Safari: Chia sẻ > Thêm vào Màn hình chính. Android Chrome: menu ba chấm > Cài đặt ứng dụng hoặc Thêm vào màn hình chính.
 
-## Lưu ý về tài khoản cũ
-- Người dùng trước đây đăng nhập Google có thể không đăng nhập được bằng mật khẩu ngay. Cần thiết lập phương thức Email/Password cho tài khoản hiện có hoặc đăng ký bằng email khác. Không xóa tài khoản cũ khi chưa sao lưu dữ liệu.
-- Đây là đăng nhập **email + mật khẩu**, không phải tên tùy ý + mật khẩu. Làm tên đăng nhập độc lập cần hệ thống xác thực riêng.
-- Chưa thử nghiệm trực tiếp với Firebase/Cloudflare đang triển khai.
+Ảnh người dùng cung cấp được dùng làm icon 192px, 512px, 180px. `manifest.webmanifest` dùng đường dẫn tương đối phù hợp GitHub Pages ở repository con.
+
+Lưu ý: không có Service Worker/cache offline; app vẫn cần mạng để đăng nhập và tìm kiếm. Nếu điện thoại hiển thị icon cũ, xóa shortcut cũ và thêm lại.
