@@ -86,6 +86,49 @@
     };
   }
 
+  function renderLinkPassword(user, message=''){
+    showRoot(`<main class="auth-page"><section class="auth-card">
+      <div class="auth-mark">🔐</div><h1>Liên kết mật khẩu Admin</h1>
+      <p class="auth-help">Đã đăng nhập Google: <b>${esc(user.email)}</b>. Đặt mật khẩu mới cho chính tài khoản này, giữ nguyên UID và quyền Admin.</p>
+      ${message?`<div class="auth-error">${esc(message)}</div>`:''}
+      <form id="linkPasswordForm" class="form-grid">
+        <div class="field"><label>Mật khẩu mới (ít nhất 6 ký tự)</label><input name="password" type="password" minlength="6" autocomplete="new-password" required></div>
+        <div class="field"><label>Nhập lại mật khẩu</label><input name="confirm" type="password" minlength="6" autocomplete="new-password" required></div>
+        <button class="primary-btn" type="submit">Liên kết mật khẩu với tài khoản cũ</button>
+      </form>
+      <button class="secondary-btn" id="skipLink">Để sau, vào ứng dụng bằng Google</button>
+      <button class="link-btn" id="logoutLink">Đăng xuất</button>
+    </section></main>`);
+    document.getElementById('skipLink').onclick=()=>showApp(user,{status:'approved',admin:true});
+    document.getElementById('logoutLink').onclick=()=>auth.signOut();
+    document.getElementById('linkPasswordForm').onsubmit=async e=>{
+      e.preventDefault();
+      const form=e.currentTarget; const password=form.password.value;
+      if(password!==form.confirm.value){renderLinkPassword(user,'Hai mật khẩu không trùng nhau.');return;}
+      const button=form.querySelector('button[type="submit"]');button.disabled=true;
+      try{
+        if(!isAdmin(user)) throw new Error('Chỉ tài khoản quản trị viên được phép thực hiện thao tác này.');
+        const credential=firebase.auth.EmailAuthProvider.credential(user.email,password);
+        await user.linkWithCredential(credential);
+        await user.reload();
+        showRoot(`<main class="auth-page"><section class="auth-card"><h1>✅ Đã liên kết thành công</h1><p>Tài khoản ${esc(user.email)} đã có thể đăng nhập bằng Email/Password và vẫn giữ UID cũ.</p><button class="primary-btn" id="testNewPassword">Đăng xuất để thử mật khẩu mới</button><button class="secondary-btn" id="continueApp">Vào ứng dụng</button></section></main>`);
+        document.getElementById('testNewPassword').onclick=()=>auth.signOut();
+        document.getElementById('continueApp').onclick=()=>showApp(auth.currentUser,{status:'approved',admin:true});
+      }catch(err){renderLinkPassword(user,firebaseError(err));}
+    };
+  }
+
+  async function signInGoogleForRecovery(){
+    const provider=new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({prompt:'select_account'});
+    try{await auth.signInWithPopup(provider);}
+    catch(err){
+      if(['auth/popup-blocked','auth/operation-not-supported-in-this-environment'].includes(err?.code)){
+        try{await auth.signInWithRedirect(provider);}catch(e){renderLogin(firebaseError(e));}
+      }else renderLogin(firebaseError(err));
+    }
+  }
+
   function renderLogin(message=''){
     showRoot(`<main class="auth-page"><section class="auth-card">
       <div class="auth-mark">🎯</div>
@@ -101,8 +144,13 @@
         <button class="primary-btn submit-auth">Đăng nhập</button>
         <button class="link-btn forgot-btn" type="button">Quên mật khẩu</button>
       </form>
+      <div class="auth-recovery" style="margin-top:14px;padding-top:12px;border-top:1px solid #ddd;text-align:center">
+        <button type="button" class="secondary-btn" id="googleRecovery">🔑 Khôi phục Admin cũ bằng Google</button>
+        <p class="small-note">Chỉ dùng một lần để liên kết mật khẩu vào tài khoản Admin Google cũ.</p>
+      </div>
       <p class="small-note">Sau khi đăng ký, tài khoản sẽ ở trạng thái chờ. Chỉ khi quản trị viên phê duyệt bạn mới vào được app.</p>
     </section></main>`);
+    document.getElementById('googleRecovery').onclick=signInGoogleForRecovery;
     const form=document.getElementById('authForm');
     document.querySelectorAll('.auth-tabs button').forEach(btn=>btn.onclick=()=>{
       document.querySelectorAll('.auth-tabs button').forEach(x=>x.classList.toggle('active',x===btn));
@@ -181,7 +229,7 @@
 
   function firebaseError(err){
     const map={
-      'auth/invalid-credential':'Email hoặc mật khẩu chưa đúng.','auth/email-already-in-use':'Email này đã được đăng ký.','auth/weak-password':'Mật khẩu phải có ít nhất 6 ký tự.','auth/invalid-email':'Địa chỉ email không hợp lệ.','auth/too-many-requests':'Thử quá nhiều lần. Hãy đợi một lúc.'
+      'auth/invalid-credential':'Email hoặc mật khẩu chưa đúng.','auth/email-already-in-use':'Email này đã được đăng ký.','auth/weak-password':'Mật khẩu phải có ít nhất 6 ký tự.','auth/invalid-email':'Địa chỉ email không hợp lệ.','auth/too-many-requests':'Thử quá nhiều lần. Hãy đợi một lúc.', 'auth/requires-recent-login':'Phiên xác thực đã cũ. Hãy đăng xuất và đăng nhập Google lại.', 'auth/provider-already-linked':'Tài khoản này đã có mật khẩu.', 'auth/credential-already-in-use':'Email/mật khẩu đã liên kết với một tài khoản khác.', 'auth/account-exists-with-different-credential':'Email này đang dùng phương thức đăng nhập khác.'
     };
     return map[err?.code]||err?.message||'Không thể xử lý yêu cầu.';
   }
@@ -240,6 +288,7 @@
         document.getElementById('refreshAdmin').onclick=async()=>{await user.reload();onUser(auth.currentUser);};
         document.getElementById('logoutAdmin').onclick=()=>auth.signOut();return;
       }
+      if(user.providerData.some(p=>p.providerId==='google.com') && !user.providerData.some(p=>p.providerId==='password')){renderLinkPassword(user);return;}
       showApp(user,{status:'approved',admin:true}); return;
     }
     try{
